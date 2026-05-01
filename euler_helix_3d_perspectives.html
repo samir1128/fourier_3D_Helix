@@ -1,0 +1,334 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Euler Helix Visualization</title>
+
+  <style>
+    h2.sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+    }
+
+    .root {
+      font-family: var(--font-sans);
+      padding: 1rem 0;
+      color: var(--color-text-primary);
+    }
+
+    .ctrl-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+
+    .vbtn {
+      padding: 5px 13px;
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      background: transparent;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+
+    .vbtn.on {
+      background: #534ab7;
+      color: #eeedfe;
+      border-color: #534ab7;
+    }
+
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 500px) {
+      .panels {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--color-background-secondary);
+      border-radius: var(--border-radius-lg);
+      padding: 10px 12px;
+    }
+
+    .ptitle {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .insight {
+      border-left: 2px solid #7f77dd;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+      margin-top: 12px;
+      border-radius: 0;
+    }
+
+    .insight b {
+      color: var(--color-text-primary);
+      font-weight: 500;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="root">
+    <h2 class="sr-only">
+      3D helix visualization of e to the power i t showing how cos t is the
+      real projection, sin t is the imaginary projection, and from the front
+      it looks like circular motion
+    </h2>
+
+    <div class="ctrl-row">
+      <span>Speed:</span>
+
+      <input
+        type="range"
+        min="0"
+        max="3"
+        step="0.1"
+        value="1"
+        id="speed"
+        style="width: 90px"
+        oninput="spd = +this.value"
+      />
+
+      <span id="ang-lbl" style="min-width: 60px; font-weight: 500"></span>
+
+      <span style="margin-left: 8px">Perspective:</span>
+
+      <button class="vbtn on" id="btn-free" onclick="setView('free')">
+        free rotate
+      </button>
+
+      <button class="vbtn" id="btn-front" onclick="setView('front')">
+        front (circle)
+      </button>
+
+      <button class="vbtn" id="btn-side" onclick="setView('side')">
+        side (sine)
+      </button>
+
+      <button class="vbtn" id="btn-top" onclick="setView('top')">
+        top (cosine)
+      </button>
+    </div>
+
+    <canvas
+      id="main"
+      height="400"
+      style="
+        width: 100%;
+        display: block;
+        border-radius: var(--border-radius-lg);
+        background: var(--color-background-secondary);
+      "
+    ></canvas>
+
+    <div class="panels" style="margin-top: 12px">
+      <div class="panel">
+        <div class="ptitle">Re axis — cos(t) projection</div>
+
+        <canvas
+          id="proj-re"
+          height="90"
+          style="width: 100%; display: block"
+        ></canvas>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">Im axis — sin(t) projection</div>
+
+        <canvas
+          id="proj-im"
+          height="90"
+          style="width: 100%; display: block"
+        ></canvas>
+      </div>
+    </div>
+
+    <div class="insight" id="insight"></div>
+  </div>
+
+  <script>
+    const D = matchMedia("(prefers-color-scheme: dark)").matches;
+
+    const FG = D ? "#c2c0b6" : "#2c2c2a";
+    const FG2 = D ? "#666360" : "#999790";
+    const BG2 = D ? "#252422" : "#f0ede6";
+    const GR = D ? "#3a3836" : "#dedad2";
+
+    const PUR = "#7F77DD";
+    const TEAL = "#1D9E75";
+    const AMB = "#BA7517";
+    const CORAL = "#D85A30";
+
+    let angle = 0;
+    let spd = 1;
+    let raf;
+
+    let viewMode = "free";
+
+    let yaw = 0.42;
+    let pitch = 0.38;
+
+    let dragging = false;
+    let lastMX = 0;
+    let lastMY = 0;
+
+    let targetYaw = 0.42;
+    let targetPitch = 0.38;
+
+    const VIEWS = {
+      free: null,
+      front: { yaw: 0, pitch: 0 },
+      side: { yaw: Math.PI / 2, pitch: 0 },
+      top: { yaw: 0, pitch: Math.PI / 2 - 0.01 }
+    };
+
+    function setView(v) {
+      viewMode = v;
+
+      ["free", "front", "side", "top"].forEach((x) => {
+        document.getElementById("btn-" + x).classList.toggle("on", x === v);
+      });
+
+      if (VIEWS[v]) {
+        targetYaw = VIEWS[v].yaw;
+        targetPitch = VIEWS[v].pitch;
+      }
+
+      updateInsight();
+    }
+
+    function updateInsight() {
+      const el = document.getElementById("insight");
+
+      const msgs = {
+        free:
+          "<b>The helix</b> lives in 3D: horizontal axes are Re and Im (the complex plane), vertical axis is time t. As t grows, the point (cos t, sin t, t) traces an upward spiral.",
+
+        front:
+          '<b>Front view (looking along the time axis)</b>: time collapses — you only see the Re-Im plane. The helix projects onto a perfect circle. This is exactly what e<sup>it</sup> = cos t + i·sin t looks like "from infinity".',
+
+        side:
+          "<b>Side view (looking along the Re axis)</b>: the real part collapses. You only see Im vs time — a pure sine wave. The imaginary part of e<sup>it</sup> is sin(t).",
+
+        top:
+          "<b>Top view (looking down the Im axis)</b>: the imaginary part collapses. You only see Re vs time — a pure cosine wave. The real part of e<sup>it</sup> is cos(t)."
+      };
+
+      el.innerHTML = msgs[viewMode];
+    }
+
+    function project3D(x, y, z, yw, pt, cx, cy, scale) {
+      const cosY = Math.cos(yw);
+      const sinY = Math.sin(yw);
+
+      const cosP = Math.cos(pt);
+      const sinP = Math.sin(pt);
+
+      const rx = x * cosY - z * sinY;
+      const ry2 = x * sinY + z * cosY;
+
+      const ry = y * cosP - ry2 * sinP;
+      const rz = y * sinP + ry2 * cosP;
+
+      return {
+        sx: cx + rx * scale,
+        sy: cy - ry * scale,
+        depth: rz
+      };
+    }
+
+    function drawMain() {
+      const el = document.getElementById("main");
+
+      const dpr = devicePixelRatio || 1;
+      const W = el.offsetWidth || 560;
+      const H = 400;
+
+      if (el.width !== Math.round(W * dpr)) {
+        el.width = Math.round(W * dpr);
+        el.height = Math.round(H * dpr);
+      }
+
+      const ctx = el.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      const cx = W / 2;
+      const cy = H / 2 + 10;
+      const scale = Math.min(W, H) * 0.28;
+
+      const yw = yaw;
+      const pt = pitch;
+
+      const axes = [
+        {
+          from: [0, 0, -1.4],
+          to: [0, 0, 1.6],
+          color: D ? "#5a5855" : "#bab8b0",
+          label: "t (time)"
+        },
+        {
+          from: [-1.3, 0, 0],
+          to: [1.5, 0, 0],
+          color: TEAL,
+          label: "Re"
+        },
+        {
+          from: [0, -1.3, 0],
+          to: [0, 1.5, 0],
+          color: CORAL,
+          label: "Im"
+        }
+      ];
+
+      axes.forEach((ax) => {
+        const a = project3D(...ax.from, yw, pt, cx, cy, scale);
+        const b = project3D(...ax.to, yw, pt, cx, cy, scale);
+
+        ctx.strokeStyle = ax.color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+
+        ctx.beginPath();
+        ctx.moveTo(a.sx, a.sy);
+        ctx.lineTo(b.sx, b.sy);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = ax.color;
+        ctx.font = "12px sans-serif";
+        ctx.fillText(ax.label, b.sx + 4, b.sy + 4);
+      });
+    }
+
+    updateInsight();
+    drawMain();
+  </script>
+</body>
+</html>

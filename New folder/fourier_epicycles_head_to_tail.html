@@ -1,0 +1,326 @@
+
+<style>
+  h2.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+  .root{font-family:var(--font-sans);padding:1rem 0;color:var(--color-text-primary)}
+  .ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;font-size:13px;color:var(--color-text-secondary)}
+  .sbtn{padding:4px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:12px}
+  .sbtn.on{background:#534AB7;color:#EEEDFE;border-color:#534AB7}
+  .canv-wrap{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);overflow:hidden}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  @media(max-width:500px){.panels{grid-template-columns:1fr}}
+  .panel{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:10px 12px}
+  .ptitle{font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+  .insight{border-left:2px solid #7F77DD;padding:8px 14px;font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-top:12px;border-radius:0}
+  .insight b{color:var(--color-text-primary);font-weight:500}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:12px;color:var(--color-text-secondary)}
+  .leg-item{display:flex;align-items:center;gap:6px}
+  .leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+</style>
+
+<div class="root">
+  <h2 class="sr-only">Interactive Fourier epicycles showing how rotating vectors at different frequencies add head to tail to trace any periodic signal</h2>
+
+  <div class="ctrl">
+    <span>Signal:</span>
+    <button class="sbtn on" id="bs-square"  onclick="setSig('square')">square wave</button>
+    <button class="sbtn"    id="bs-sawtooth" onclick="setSig('sawtooth')">sawtooth</button>
+    <button class="sbtn"    id="bs-triangle" onclick="setSig('triangle')">triangle</button>
+    <button class="sbtn"    id="bs-custom"   onclick="setSig('custom')">free draw</button>
+    <span style="margin-left:6px">Terms N:</span>
+    <input type="range" id="nterms" min="1" max="20" step="1" value="5" style="width:90px" oninput="setN(+this.value)">
+    <span id="n-lbl" style="font-weight:500;min-width:20px">5</span>
+    <button class="sbtn" id="playbtn" onclick="togglePlay()">⏸ pause</button>
+  </div>
+
+  <div class="canv-wrap">
+    <canvas id="main" style="width:100%;display:block" height="420"></canvas>
+  </div>
+
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#7F77DD"></div><span>n=±1 (fundamental)</span></div>
+    <div class="leg-item"><div class="leg-dot" style="background:#1D9E75"></div><span>n=±3</span></div>
+    <div class="leg-item"><div class="leg-dot" style="background:#BA7517"></div><span>n=±5</span></div>
+    <div class="leg-item"><div class="leg-dot" style="background:#D85A30"></div><span>n=±7+</span></div>
+    <div class="leg-item"><div class="leg-dot" style="background:#378ADD"></div><span>tip path</span></div>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="ptitle">Re(t) — real part of tip</div>
+      <canvas id="wave-re" height="90" style="width:100%;display:block"></canvas>
+    </div>
+    <div class="panel">
+      <div class="ptitle">Im(t) — imaginary part of tip</div>
+      <canvas id="wave-im" height="90" style="width:100%;display:block"></canvas>
+    </div>
+  </div>
+
+  <div class="insight" id="insight"></div>
+</div>
+
+<script>
+const D = matchMedia('(prefers-color-scheme: dark)').matches;
+const FG  = D ? '#c2c0b6' : '#2c2c2a';
+const FG2 = D ? '#555350' : '#999790';
+const GR  = D ? '#3a3836' : '#dedad2';
+const PUR  = '#7F77DD', TEAL = '#1D9E75', AMB = '#BA7517', CORAL = '#D85A30', BLU = '#378ADD';
+const FREQ_COLS = [PUR, TEAL, AMB, CORAL, '#D4537E', '#639922'];
+
+let sig = 'square', N = 5, playing = true, t = 0;
+let customPts = [], drawing = false;
+let trailRe = [], trailIm = [], tipTrail = [];
+const TRAIL = 400;
+
+function getCoeffs() {
+  const terms = [];
+  if (sig === 'square') {
+    for (let k = 1; k <= N*2+1; k += 2) {
+      const a = 4 / (Math.PI * k);
+      terms.push({ n: k,  re:  a, im: 0 });
+      terms.push({ n: -k, re:  a, im: 0 });
+    }
+  } else if (sig === 'sawtooth') {
+    for (let k = 1; k <= N; k++) {
+      const a = -2 / (Math.PI * k) * (k % 2 === 0 ? 1 : 1);
+      const sign = k % 2 === 0 ? 1 : -1;
+      const av = 2 / (Math.PI * k);
+      terms.push({ n:  k, re: 0, im: -av });
+      terms.push({ n: -k, re: 0, im:  av });
+    }
+  } else if (sig === 'triangle') {
+    for (let k = 1; k <= N*2+1; k += 2) {
+      const sign = ((k-1)/2) % 2 === 0 ? 1 : -1;
+      const a = sign * 8 / (Math.PI * Math.PI * k * k);
+      terms.push({ n:  k, re: a, im: 0 });
+      terms.push({ n: -k, re: a, im: 0 });
+    }
+  } else {
+    if (customPts.length < 4) {
+      for (let k = 1; k <= N; k++) {
+        const a = k === 1 ? 0.8 : 0.8/k;
+        terms.push({ n: k, re: a*0.7, im: a*0.3 });
+        terms.push({ n: -k, re: a*0.5, im: -a*0.3 });
+      }
+      return terms;
+    }
+    for (let k = -N; k <= N; k++) {
+      if (k === 0) continue;
+      let re = 0, im = 0;
+      const M = customPts.length;
+      for (let j = 0; j < M; j++) {
+        const theta = 2 * Math.PI * k * j / M;
+        re += customPts[j].x * Math.cos(theta) + customPts[j].y * Math.sin(theta);
+        im += customPts[j].y * Math.cos(theta) - customPts[j].x * Math.sin(theta);
+      }
+      terms.push({ n: k, re: re/M, im: im/M });
+    }
+  }
+  return terms;
+}
+
+function colForN(n) {
+  const ak = Math.abs(n);
+  if (ak <= 1) return PUR;
+  if (ak <= 3) return TEAL;
+  if (ak <= 5) return AMB;
+  if (ak <= 7) return CORAL;
+  return '#D4537E';
+}
+
+function setSig(s) {
+  sig = s;
+  ['square','sawtooth','triangle','custom'].forEach(x =>
+    document.getElementById('bs-'+x).classList.toggle('on', x===s));
+  tipTrail = []; trailRe = []; trailIm = [];
+  customPts = [];
+  updateInsight();
+}
+
+function setN(v) {
+  N = v;
+  document.getElementById('n-lbl').textContent = v;
+  tipTrail = []; trailRe = []; trailIm = [];
+  updateInsight();
+}
+
+function togglePlay() {
+  playing = !playing;
+  document.getElementById('playbtn').textContent = playing ? '⏸ pause' : '▶ play';
+}
+
+function updateInsight() {
+  const el = document.getElementById('insight');
+  const msgs = {
+    square:   `<b>Square wave</b>: only odd harmonics n = ±1, ±3, ±5… The fundamental (n=1) is the big slow circle. Each odd harmonic adds a smaller, faster circle. Their coefficients fall as 1/n — that's why each arrow is shorter. Head-to-tail addition of all these circles traces the square corners.`,
+    sawtooth: `<b>Sawtooth wave</b>: all harmonics n = ±1, ±2, ±3… Coefficients fall as 1/n. Notice both clockwise (−n) and counter-clockwise (+n) arrows — they combine to produce the slanted ramp shape.`,
+    triangle: `<b>Triangle wave</b>: only odd harmonics like the square, but coefficients fall as 1/n² — much faster. So fewer terms are needed to get a smooth triangle. The tip path converges quickly.`,
+    custom:   `<b>Free draw mode</b>: draw a path on the canvas. The DFT extracts the rotating vector representation of your drawing — each arrow spins at a frequency proportional to how many times it wraps around per period.`
+  };
+  el.innerHTML = msgs[sig] || '';
+}
+
+function drawMain() {
+  const el = document.getElementById('main');
+  const dpr = devicePixelRatio || 1;
+  const W = el.offsetWidth || 560, H = 420;
+  if (el.width !== Math.round(W*dpr)) { el.width = Math.round(W*dpr); el.height = Math.round(H*dpr); }
+  const ctx = el.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  const epicW = W * 0.48, waveW = W * 0.48;
+  const cx = epicW / 2, cy = H / 2;
+
+  ctx.strokeStyle = GR; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(cx - epicW*0.45, cy); ctx.lineTo(cx + epicW*0.45, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy - H*0.45); ctx.lineTo(cx, cy + H*0.45); ctx.stroke();
+
+  const coeffs = getCoeffs();
+  coeffs.sort((a, b) => {
+    const ma = Math.sqrt(a.re*a.re+a.im*a.im), mb = Math.sqrt(b.re*b.re+b.im*b.im);
+    return mb - ma;
+  });
+
+  const scale = epicW * 0.38;
+  let x = cx, y = cy;
+  const joints = [{x, y}];
+
+  for (const c of coeffs) {
+    const phase = 2 * Math.PI * c.n * t;
+    const cos_p = Math.cos(phase), sin_p = Math.sin(phase);
+    const vx = (c.re * cos_p - c.im * sin_p) * scale;
+    const vy = -(c.re * sin_p + c.im * cos_p) * scale;
+    const nx = x + vx, ny = y + vy;
+    const col = colForN(c.n);
+    const mag = Math.sqrt(c.re*c.re+c.im*c.im);
+
+    ctx.strokeStyle = col; ctx.lineWidth = 0.5; ctx.globalAlpha = 0.25;
+    ctx.beginPath(); ctx.arc(x, y, mag * scale, 0, Math.PI*2); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = col; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+
+    const hlen = 5, angle = Math.atan2(ny-y, nx-x);
+    ctx.beginPath();
+    ctx.moveTo(nx, ny);
+    ctx.lineTo(nx - hlen*Math.cos(angle-0.4), ny - hlen*Math.sin(angle-0.4));
+    ctx.lineTo(nx - hlen*Math.cos(angle+0.4), ny - hlen*Math.sin(angle+0.4));
+    ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+
+    x = nx; y = ny;
+    joints.push({x, y});
+  }
+
+  if (tipTrail.length > TRAIL) tipTrail.shift();
+  tipTrail.push({x, y});
+
+  if (tipTrail.length > 1) {
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i < tipTrail.length; i++) {
+      const alpha = i / tipTrail.length;
+      ctx.strokeStyle = D ? `rgba(55,138,221,${alpha*0.85})` : `rgba(24,95,165,${alpha*0.85})`;
+      ctx.beginPath(); ctx.moveTo(tipTrail[i-1].x, tipTrail[i-1].y); ctx.lineTo(tipTrail[i].x, tipTrail[i].y); ctx.stroke();
+    }
+  }
+
+  ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fillStyle = BLU; ctx.fill();
+
+  const waveX0 = W * 0.525, waveX1 = W - 10;
+  const waveH = H * 0.38;
+  const reCY = H * 0.28, imCY = H * 0.72;
+
+  ctx.strokeStyle = GR; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(waveX0, reCY); ctx.lineTo(waveX1, reCY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(waveX0, imCY); ctx.lineTo(waveX1, imCY); ctx.stroke();
+
+  ctx.strokeStyle = D ? 'rgba(127,119,221,0.15)':'rgba(83,74,183,0.12)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(waveX0, reCY - ((x-cx)/scale)*waveH); ctx.stroke();
+
+  if (trailRe.length > 1) {
+    ctx.strokeStyle = PUR; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    trailRe.forEach((v, i) => {
+      const px2 = waveX0 + (waveX1-waveX0)*(1 - i/TRAIL);
+      const py2 = reCY - v * waveH;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    });
+    ctx.stroke();
+  }
+
+  if (trailIm.length > 1) {
+    ctx.strokeStyle = CORAL; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    trailIm.forEach((v, i) => {
+      const px2 = waveX0 + (waveX1-waveX0)*(1 - i/TRAIL);
+      const py2 = imCY - v * waveH;
+      i===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2);
+    });
+    ctx.stroke();
+  }
+
+  const tipRe = (x - cx) / scale, tipIm = -(y - cy) / scale;
+  trailRe.unshift(tipRe); if (trailRe.length > TRAIL) trailRe.pop();
+  trailIm.unshift(tipIm); if (trailIm.length > TRAIL) trailIm.pop();
+
+  ctx.fillStyle = FG2; ctx.font = '11px var(--font-sans)';
+  ctx.fillText('Re(t)', waveX0+4, reCY-waveH-4);
+  ctx.fillText('Im(t)', waveX0+4, imCY-waveH-4);
+  ctx.fillText('N='+N+' terms', 8, 18);
+  if (sig==='custom' && customPts.length < 4) {
+    ctx.fillStyle = FG2; ctx.font = '13px var(--font-sans)';
+    ctx.fillText('draw a shape here', cx-60, cy-8);
+  }
+}
+
+const mc = document.getElementById('main');
+mc.addEventListener('mousedown', e => {
+  if (sig!=='custom') return;
+  drawing = true; customPts = [];
+  const r = mc.getBoundingClientRect();
+  const W = mc.offsetWidth, H = 420;
+  const scale = Math.min(W,H)*0.38*0.48;
+  const cx = W*0.48/2, cy = H/2;
+  customPts.push({x:(e.clientX-r.left-cx)/scale, y:-(e.clientY-r.top-cy)/scale});
+  tipTrail=[]; trailRe=[]; trailIm=[];
+});
+mc.addEventListener('mousemove', e => {
+  if (!drawing || sig!=='custom') return;
+  const r = mc.getBoundingClientRect();
+  const W = mc.offsetWidth, H = 420;
+  const scale = Math.min(W,H)*0.38*0.48;
+  const cx = W*0.48/2, cy = H/2;
+  customPts.push({x:(e.clientX-r.left-cx)/scale, y:-(e.clientY-r.top-cy)/scale});
+});
+window.addEventListener('mouseup', ()=>{ drawing=false; });
+
+mc.addEventListener('touchstart', e=>{
+  if (sig!=='custom') return;
+  drawing=true; customPts=[];
+  const r=mc.getBoundingClientRect();
+  const W=mc.offsetWidth, H=420;
+  const scale=Math.min(W,H)*0.38*0.48;
+  const cx=W*0.48/2, cy=H/2;
+  customPts.push({x:(e.touches[0].clientX-r.left-cx)/scale, y:-(e.touches[0].clientY-r.top-cy)/scale});
+  tipTrail=[]; trailRe=[]; trailIm=[];
+},{passive:true});
+mc.addEventListener('touchmove', e=>{
+  if (!drawing||sig!=='custom') return;
+  const r=mc.getBoundingClientRect();
+  const W=mc.offsetWidth, H=420;
+  const scale=Math.min(W,H)*0.38*0.48;
+  const cx=W*0.48/2, cy=H/2;
+  customPts.push({x:(e.touches[0].clientX-r.left-cx)/scale, y:-(e.touches[0].clientY-r.top-cy)/scale});
+},{passive:true});
+window.addEventListener('touchend',()=>{drawing=false;});
+
+function loop() {
+  if (playing) t += 0.0015;
+  drawMain();
+  requestAnimationFrame(loop);
+}
+
+updateInsight();
+loop();
+</script>
