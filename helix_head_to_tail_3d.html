@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Helix</title>
+  <style>
+  * {
+    box-sizing: border-box;
+  }
+
+  .wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px 18px 40px;
+    font-family: var(--font-sans);
+    color: var(--color-text-primary);
+  }
+
+  h2.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .root {
+    padding: 1rem 0;
+  }
+
+  .ctrl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+  }
+
+  .vbtn {
+    padding: 6px 12px;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    transition: 0.18s ease;
+  }
+
+  .vbtn:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+  }
+
+  .vbtn.on {
+    background: #534ab7;
+    color: #eeedfe;
+    border-color: #534ab7;
+  }
+
+  .canv-bg {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    padding: 8px;
+  }
+
+  .row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  @media (max-width: 700px) {
+    .row2 {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .panel {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-lg);
+    padding: 12px 14px;
+  }
+
+  .ptitle {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .callout {
+    border-left: 3px solid #7f77dd;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    margin-top: 16px;
+    background: var(--color-background-secondary);
+    border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+  }
+
+  .callout b {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+
+  .text-block {
+    margin-top: 20px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .text-card {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-lg);
+    padding: 16px 18px;
+  }
+
+  .text-card p {
+    margin: 0;
+    line-height: 1.8;
+    font-size: 15px;
+    color: var(--color-text-secondary);
+  }
+
+  .text-card strong {
+    color: var(--color-text-primary);
+  }
+
+  canvas {
+    width: 100%;
+    display: block;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+  <div class="root">
+    <h2 class="sr-only">
+      3D visualization showing how multiple helices at different frequencies are
+      chained head to tail, with their projection onto the complex plane forming
+      the Fourier epicycle picture
+    </h2>
+
+    <div class="ctrl">
+      <span>Step:</span>
+
+      <button class="vbtn on" id="s0" onclick="setStep(0)">1 helix alone</button>
+      <button class="vbtn" id="s1" onclick="setStep(1)">+ 2nd helix</button>
+      <button class="vbtn" id="s2" onclick="setStep(2)">+ 3rd helix</button>
+      <button class="vbtn" id="s3" onclick="setStep(3)">all 4 helices</button>
+
+      <span style="margin-left: 8px;">View:</span>
+
+      <button class="vbtn on" id="v-free" onclick="setView('free')">rotate</button>
+      <button class="vbtn" id="v-front" onclick="setView('front')">front</button>
+      <button class="vbtn" id="v-side" onclick="setView('side')">side</button>
+
+      <button
+        class="vbtn"
+        id="playbtn"
+        onclick="togglePlay()"
+        style="margin-left:8px;"
+      >
+        ⏸ pause
+      </button>
+    </div>
+
+    <div class="canv-bg">
+      <canvas id="main" height="460"></canvas>
+    </div>
+
+    <div class="row2">
+      <div class="panel">
+        <div class="ptitle">Front View — Complex Plane (Re, Im)</div>
+        <canvas id="front" height="140"></canvas>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">Tip Path Re(t) — Reconstructed Signal</div>
+        <canvas id="wave" height="140"></canvas>
+      </div>
+    </div>
+
+    <div class="callout" id="callout"></div>
+
+    <div class="text-block">
+      <div class="text-card">
+        <p>
+          <strong>This is the unified picture.</strong> Merge the 3D helix
+          interpretation of
+          <em>e<sup>inωt</sup></em>
+          with the 2D epicycle view of Fourier sums. What you are seeing is both
+          geometry and algebra at once.
+        </p>
+      </div>
+
+      <div class="text-card">
+        <p>
+          In full mode, the outer tip traces the compound path. Switch to
+          <strong>front view</strong> to collapse time and reveal epicycles.
+          Switch to <strong>side view</strong> to reveal the real-valued signal
+          emerging from summed cosines.
+        </p>
+      </div>
+
+      <div class="text-card">
+        <p>
+          <strong>Head-to-tail in 3D</strong> means each new helix is attached
+          to the moving tip of the previous one. So every smaller spiral rides
+          on top of a larger moving spiral.
+        </p>
+      </div>
+
+      <div class="text-card">
+        <p>
+          The 3D helix and the 2D epicycle are the same object viewed from
+          different angles. Fourier series says periodic signals are shadows of
+          rotating nested spirals.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const D = matchMedia('(prefers-color-scheme: dark)').matches; const FG = D ? '#c2c0b6' : '#2c2c2a'; const FG2 = D ? '#666360' : '#999790'; const GR = D ? '#3a3836' : '#dedad2'; const HELICES = [ { n: 1, amp: 1.00, col: '#7F77DD', name: 'n=1 fundamental' }, { n: 3, amp: 0.33, col: '#1D9E75', name: 'n=3 3rd harmonic' }, { n: 5, amp: 0.20, col: '#BA7517', name: 'n=5 5th harmonic' }, { n: 7, amp: 0.14, col: '#D85A30', name: 'n=7 7th harmonic' }, ]; let step = 0, playing = true, t = 0; let yaw = 0.55, pitch = 0.30, targetYaw = 0.55, targetPitch = 0.30; let dragging = false, lastMX = 0, lastMY = 0; let tipTrail = [], maxTrail = 320; function setStep(s) { step = s; for(let i=0;i<4;i++) document.getElementById('s'+i).classList.toggle('on', i===s); tipTrail = []; updateCallout(); } function setView(v) { ['free','front','side'].forEach(x => document.getElementById('v-'+x).classList.toggle('on', x===v)); if (v==='front') { targetYaw=0; targetPitch=0; } else if (v==='side') { targetYaw=Math.PI/2; targetPitch=0; } } function togglePlay() { playing = !playing; document.getElementById('playbtn').textContent = playing ? '⏸ pause' : '▶ play'; } function updateCallout() { const msgs = [ '<b>One helix.</b> e<sup>iωt</sup> = cos(ωt) + i·sin(ωt) traces a helix in (Re, Im, t) space. Its radius is |c₁| = 1. From the front it\'s a circle. From the side it\'s a cosine wave. From the top it\'s a sine wave. This is the n=1 fundamental.', '<b>Second helix attached head-to-tail.</b> The n=3 helix doesn\'t start at the origin — its base is welded to the <em>tip</em> of the first helix. As t advances, both spin simultaneously: n=1 slowly, n=3 three times faster. The joint between them traces its own spiral path in 3D.', '<b>Third helix chained on.</b> n=5 helix attaches to the tip of the n=3 helix. It\'s smaller (amplitude 1/5) and spins 5× faster. You can see each helix corkscrewing around the one before it — nested spirals, each winding tighter and faster.', '<b>All 4 helices — square wave approximation.</b> The tip of the outermost helix (amber dot) traces the compound path. Switch to "front view" to collapse time — you see the 2D epicycles. Switch to "side view" to see Re(t) — the square wave emerging from summed cosines. The key insight: each helix is a 3D object (helix = circle × time), and chaining them head-to-tail in 3D is exactly the same as adding the complex exponentials analytically.' ]; document.getElementById('callout').innerHTML = msgs[step]; } function proj(x, y, z, yw, pt, cx, cy, sc) { const cY=Math.cos(yw), sY=Math.sin(yw), cP=Math.cos(pt), sP=Math.sin(pt); const rx = x*cY - z*sY; const rz = x*sY + z*cY; const ry = y*cP - rz*sP; return { sx: cx + rx*sc, sy: cy - ry*sc }; } function getPositions(tv) { let x=0, y=0; const pts = [{x,y}]; const nVisible = step + 1; for (let i=0; i<nVisible; i++) { const h = HELICES[i]; const angle = 2*Math.PI*h.n*tv; x += h.amp * Math.cos(angle); y += h.amp * Math.sin(angle); pts.push({x, y}); } return pts; } function drawMain() { const el = document.getElementById('main'); const dpr = devicePixelRatio||1; const W = el.offsetWidth||560, H = 460; if (el.width !== Math.round(W*dpr)) { el.width=Math.round(W*dpr); el.height=Math.round(H*dpr); } const ctx = el.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H); const cx=W/2, cy=H/2+10; const sc = Math.min(W,H)*0.19; const yw=yaw, pt=pitch; const tRange = 2, N3d = 120, nVisible = step+1; const tMax = tRange; const axisColor = D ? '#4a4844':'#c8c6be'; const axDefs=[ {a:[0,0,-tRange], b:[0,0,tRange+0.3], label:'t'}, {a:[-1.8,0,0], b:[1.9,0,0], label:'Re'}, {a:[0,-1.8,0], b:[0,1.9,0], label:'Im'}, ]; axDefs.forEach(ax=>{ const pa=proj(...ax.a, yw, pt, cx, cy, sc); const pb=proj(...ax.b, yw, pt, cx, cy, sc); ctx.strokeStyle=axisColor; ctx.lineWidth=0.5; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(pa.sx,pa.sy); ctx.lineTo(pb.sx,pb.sy); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle=FG2; ctx.font='12px var(--font-sans)'; ctx.fillText(ax.label, pb.sx+4, pb.sy+4); }); for (let i=0; i<nVisible; i++) { const h = HELICES[i]; const col = h.col; let prevPt = null; for (let k=0; k<=N3d; k++) { const tv = -tMax + 2*tMax*k/N3d; const pts = getPositions(tv); const base = pts[i], tip3d = pts[i+1]; const bz = tv, tz = tv; const pb = proj(base.x, base.y, bz, yw, pt, cx, cy, sc); const pt3 = proj(tip3d.x, tip3d.y, tz, yw, pt, cx, cy, sc); const alpha = 0.12 + 0.55*(k/N3d); ctx.strokeStyle = hexA(col, alpha); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(pb.sx, pb.sy); ctx.lineTo(pt3.sx, pt3.sy); ctx.stroke(); if (k>0 && prevPt) { ctx.strokeStyle = hexA(col, alpha*0.4); ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(prevPt.sx, prevPt.sy); ctx.lineTo(pt3.sx, pt3.sy); ctx.stroke(); } prevPt = pt3; } } const pts = getPositions(t); for (let i=0; i<nVisible; i++) { const h = HELICES[i]; const base=pts[i], tip=pts[i+1]; const bz=t, tz=t; const pb = proj(base.x, base.y, bz, yw, pt, cx, cy, sc); const pt3= proj(tip.x, tip.y, tz, yw, pt, cx, cy, sc); ctx.strokeStyle = h.col; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(pb.sx,pb.sy); ctx.lineTo(pt3.sx,pt3.sy); ctx.stroke(); const ang = Math.atan2(pt3.sy-pb.sy, pt3.sx-pb.sx); const hl=7; ctx.beginPath(); ctx.moveTo(pt3.sx, pt3.sy); ctx.lineTo(pt3.sx - hl*Math.cos(ang-0.4), pt3.sy - hl*Math.sin(ang-0.4)); ctx.lineTo(pt3.sx - hl*Math.cos(ang+0.4), pt3.sy - hl*Math.sin(ang+0.4)); ctx.closePath(); ctx.fillStyle=h.col; ctx.fill(); ctx.beginPath(); ctx.arc(pb.sx, pb.sy, 3, 0, Math.PI*2); ctx.fillStyle=h.col; ctx.fill(); ctx.fillStyle=FG2; ctx.font='11px var(--font-sans)'; ctx.fillText(h.name, pt3.sx+6, pt3.sy); } const tipNow = pts[nVisible]; if (tipTrail.length > maxTrail) tipTrail.shift(); tipTrail.push({ x: tipNow.x, y: tipNow.y, z: t }); if (tipTrail.length>1) { for (let i=1;i<tipTrail.length;i++) { const alpha = (i/tipTrail.length)*0.9; const pa2 = proj(tipTrail[i-1].x, tipTrail[i-1].y, tipTrail[i-1].z, yw, pt, cx, cy, sc); const pb2 = proj(tipTrail[i].x, tipTrail[i].y, tipTrail[i].z, yw, pt, cx, cy, sc); ctx.strokeStyle = hexA('#378ADD', alpha); ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(pa2.sx,pa2.sy); ctx.lineTo(pb2.sx,pb2.sy); ctx.stroke(); } } const tipP = proj(tipNow.x, tipNow.y, t, yw, pt, cx, cy, sc); ctx.beginPath(); ctx.arc(tipP.sx, tipP.sy, 5, 0, Math.PI*2); ctx.fillStyle='#378ADD'; ctx.fill(); ctx.fillStyle=FG2; ctx.font='11px var(--font-sans)'; ctx.fillText('drag to rotate', W-90, H-10); } function drawFront() { const el = document.getElementById('front'); const dpr = devicePixelRatio||1; const W = el.offsetWidth||200, H = 140; if (el.width!==Math.round(W*dpr)){el.width=Math.round(W*dpr);el.height=Math.round(H*dpr);} const ctx=el.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H); const cx=W/2, cy=H/2, sc=Math.min(W,H)*0.37; ctx.strokeStyle=GR; ctx.lineWidth=0.5; ctx.beginPath(); ctx.moveTo(cx-sc*1.8,cy); ctx.lineTo(cx+sc*1.8,cy); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx,cy-sc*1.6); ctx.lineTo(cx,cy+sc*1.6); ctx.stroke(); const nVisible=step+1; const N=200; for (let i=0;i<nVisible;i++) { const h=HELICES[i]; ctx.strokeStyle=hexA(h.col, 0.18); ctx.lineWidth=1; ctx.beginPath(); for(let k=0;k<=N;k++){ const tv=k/N*2*Math.PI; const pts=getPositions(tv/2); const tip=pts[i+1]; const x=cx+tip.x*sc, y=cy-tip.y*sc; k===0?ctx.moveTo(x,y):ctx.lineTo(x,y); } ctx.stroke(); } const pts=getPositions(t); let x=cx, y=cy; for(let i=0;i<nVisible;i++){ const h=HELICES[i]; const tip=pts[i+1]; const nx=cx+tip.x*sc, ny=cy-tip.y*sc; ctx.strokeStyle=h.col; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(nx,ny); ctx.stroke(); const ang=Math.atan2(ny-y,nx-x); ctx.beginPath(); ctx.moveTo(nx,ny); ctx.lineTo(nx-6*Math.cos(ang-0.4),ny-6*Math.sin(ang-0.4)); ctx.lineTo(nx-6*Math.cos(ang+0.4),ny-6*Math.sin(ang+0.4)); ctx.closePath(); ctx.fillStyle=h.col; ctx.fill(); x=nx; y=ny; } ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fillStyle='#378ADD'; ctx.fill(); ctx.fillStyle=FG2; ctx.font='10px var(--font-sans)'; ctx.fillText('Re',cx+sc*1.6,cy-4); ctx.fillText('Im',cx+4,cy-sc*1.4); } function drawWave() { const el=document.getElementById('wave'); const dpr=devicePixelRatio||1; const W=el.offsetWidth||200, H=140; if(el.width!==Math.round(W*dpr)){el.width=Math.round(W*dpr);el.height=Math.round(H*dpr);} const ctx=el.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H); const pad={l:10,r:10,t:10,b:18}; const pw=W-pad.l-pad.r, ph=H-pad.t-pad.b; const sc=ph*0.42; ctx.strokeStyle=GR; ctx.lineWidth=0.5; ctx.beginPath(); ctx.moveTo(pad.l,pad.t+ph/2); ctx.lineTo(pad.l+pw,pad.t+ph/2); ctx.stroke(); const nVisible=step+1, N=300; ctx.strokeStyle='#378ADD'; ctx.lineWidth=1.5; ctx.beginPath(); for(let k=0;k<=N;k++){ const tv=k/N*4; const pts=getPositions(tv); const tip=pts[nVisible]; const x=pad.l+pw*k/N, y=pad.t+ph/2-tip.x*sc; k===0?ctx.moveTo(x,y):ctx.lineTo(x,y); } ctx.stroke(); const pts=getPositions(t); const tip=pts[nVisible]; const tx=pad.l+pw*((t%4)/4); const ty=pad.t+ph/2-tip.x*sc; ctx.beginPath(); ctx.arc(tx,ty,4,0,Math.PI*2); ctx.fillStyle='#378ADD'; ctx.fill(); const lbls=['fundamental','fund + n=3','fund + n=3,5','square wave approx']; ctx.fillStyle=FG2; ctx.font='10px var(--font-sans)'; ctx.fillText(lbls[step], pad.l+4, pad.t+12); } function hexA(hex, a) { const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16); return `rgba(${r},${g},${b},${a})`; } const mc=document.getElementById('main'); mc.addEventListener('mousedown',e=>{dragging=true;lastMX=e.clientX;lastMY=e.clientY;}); window.addEventListener('mouseup',()=>dragging=false); window.addEventListener('mousemove',e=>{ if(!dragging) return; targetYaw += (e.clientX-lastMX)*0.007; targetPitch += (e.clientY-lastMY)*0.007; targetPitch = Math.max(-1.4, Math.min(1.4, targetPitch)); lastMX=e.clientX; lastMY=e.clientY; document.getElementById('v-free').classList.add('on'); ['front','side'].forEach(x=>document.getElementById('v-'+x).classList.remove('on')); }); mc.addEventListener('touchstart',e=>{dragging=true;lastMX=e.touches[0].clientX;lastMY=e.touches[0].clientY;},{passive:true}); window.addEventListener('touchend',()=>dragging=false); window.addEventListener('touchmove',e=>{ if(!dragging) return; targetYaw += (e.touches[0].clientX-lastMX)*0.007; targetPitch += (e.touches[0].clientY-lastMY)*0.007; targetPitch = Math.max(-1.4, Math.min(1.4, targetPitch)); lastMX=e.touches[0].clientX; lastMY=e.touches[0].clientY; },{passive:true}); function loop() { if(playing) t += 0.005; yaw += (targetYaw - yaw) * 0.08; pitch += (targetPitch - pitch) * 0.08; drawMain(); drawFront(); drawWave(); requestAnimationFrame(loop); } updateCallout(); loop();
+
+
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
